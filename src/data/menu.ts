@@ -1,0 +1,45 @@
+import { MenuItem } from '../types/pos';
+
+export const MENU_ITEMS: MenuItem[] = [
+  {
+    id: 'churros',
+    name: 'Churros Renyah',
+    price: 7500,
+    category: 'FOOD',
+    description: 'Churros goreng hangat bertabur kayu manis & gula halus, lengkap dengan saus cokelat.',
+    badge: 'Cemilan Populer',
+    iconName: 'Cookie',
+    includes: { churros: 1 },
+  },
+  {
+    id: 'ricebowl',
+    name: 'Rice Bowl Scrambled Egg',
+    price: 10000,
+    category: 'FOOD',
+    description: 'Nasi hangat dengan scrambled egg lembut gurih dan potongan ayam lezat.',
+    badge: 'Makanan Utama',
+    iconName: 'UtensilsCrossed',
+    includes: { ricebowl: 1 },
+  },
+  {
+    id: 'lemontea',
+    name: 'Lemon Tea Segar',
+    price: 6000,
+    category: 'DRINK',
+    description: 'Seduhan teh melati dingin berpadu irisan lemon segar kaya vitamin C.',
+    badge: 'Best Drink',
+    iconName: 'CupSoda',
+    includes: { lemontea: 1 },
+  },
+  {
+    id: 'paket-hemat',
+    name: 'Paket Hemat (Rice Bowl Scrambled Egg + Lemon Tea)',
+    price: 15000,
+    originalPrice: 16000,
+    category: 'COMBO',
+    description: 'Kombinasi komplit 1x Rice Bowl Scrambled Egg + 1x Lemon Tea Segar! Hemat Rp 1.000.',
+    badge: '🔥 Paling Hemat',
+    iconName: 'Sparkles',
+    includes: { ricebowl: 1, lemontea: 1 },
+  },
+];

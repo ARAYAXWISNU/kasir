@@ -1,0 +1,6 @@
+{
+  "name": "Kasir Kilat & Laporan Harian",
+  "description": "Aplikasi kasir praktis dengan pencatatan pesanan real-time, opsi pembayaran Cash/QRIS/Crypto, dan sinkronisasi otomatis ke Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
