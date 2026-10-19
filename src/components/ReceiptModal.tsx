@@ -13,6 +13,7 @@ import {
 import { playTapSound } from '../utils/audio';
 
 interface Props {
+  isOpen: boolean;
   transaction: Transaction | null;
   onClose: () => void;
   onNewOrder: () => void;
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export const ReceiptModal: React.FC<Props> = ({
+  isOpen,
   transaction,
   onClose,
   onNewOrder,
@@ -27,7 +29,7 @@ export const ReceiptModal: React.FC<Props> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
-  if (!transaction) return null;
+  if (!isOpen || !transaction) return null;
 
   const handlePrint = () => {
     window.print();

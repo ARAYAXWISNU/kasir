@@ -901,13 +901,16 @@ export default function App() {
 
       {/* Receipt Modal */}
       <ReceiptModal
+        isOpen={isReceiptModalOpen}
         transaction={latestTransaction}
         onClose={() => {
           setIsReceiptModalOpen(false);
+          setLatestTransaction(null);
           setActiveTab('pos');
         }}
         onNewOrder={() => {
           setIsReceiptModalOpen(false);
+          setLatestTransaction(null);
           setActiveTab('pos');
         }}
         sheetUrl={spreadsheet?.url}
