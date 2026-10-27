@@ -13,7 +13,7 @@ export default defineConfig(() => {
     build: {
       target: ['es2015', 'chrome80'],
       cssTarget: 'chrome80',
-      minify: 'esbuild',
+      minify: 'esbuild' as const,
       rollupOptions: {
         output: {
           manualChunks: {

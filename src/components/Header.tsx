@@ -26,6 +26,7 @@ interface Props {
   onSignIn: () => void;
   onSignOut: () => void;
   spreadsheet: SpreadsheetInfo | null;
+  hasWebhook?: boolean;
   isSyncing: boolean;
   offlineQueueCount: number;
   preorderCount: number;
@@ -42,6 +43,7 @@ export const Header: React.FC<Props> = ({
   onSignIn,
   onSignOut,
   spreadsheet,
+  hasWebhook,
   isSyncing,
   offlineQueueCount,
   preorderCount,
@@ -129,7 +131,27 @@ export const Header: React.FC<Props> = ({
           {/* Right Status & Actions */}
           <div className="flex items-center gap-2">
             {/* Google Sheets Status Pill */}
-            {user && spreadsheet ? (
+            {hasWebhook ? (
+              <div className="hidden lg:flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-full font-medium">
+                {isSyncing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                ) : (
+                  <CloudCheck className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+                <span>Auto-Sync Webhook</span>
+                {spreadsheet && (
+                  <a
+                    href={spreadsheet.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center ml-1 text-emerald-700 hover:text-emerald-950 font-bold hover:underline"
+                    title="Buka Spreadsheet di Tab Baru"
+                  >
+                    <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
+                )}
+              </div>
+            ) : user && spreadsheet ? (
               <div className="hidden lg:flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-full font-medium">
                 {isSyncing ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
@@ -147,20 +169,16 @@ export const Header: React.FC<Props> = ({
                   <ExternalLink className="w-3 h-3 ml-0.5" />
                 </a>
               </div>
-            ) : user ? (
-              <div className="hidden lg:flex items-center gap-1.5 text-xs bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-full font-medium">
-                {isSyncing ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                ) : (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
-                )}
-                <span>Menyiapkan Sheet...</span>
-              </div>
             ) : (
-              <div className="hidden lg:flex items-center gap-1.5 text-xs bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-full font-medium">
-                <CloudOff className="w-3.5 h-3.5 text-slate-400" />
-                <span>Mode Offline (Lokal)</span>
-              </div>
+              <button
+                type="button"
+                onClick={openSettings}
+                className="hidden lg:flex items-center gap-1.5 text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-full font-medium transition-colors"
+                title="Buka Pengaturan Spreadsheet"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Target Sheet Siap</span>
+              </button>
             )}
 
             {/* Offline queue warning */}

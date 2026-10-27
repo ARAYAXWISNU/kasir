@@ -17,13 +17,19 @@ import {
 } from './services/firebase';
 import { 
   SpreadsheetInfo, 
+  DEFAULT_SPREADSHEET_INFO,
+  TARGET_SPREADSHEET_ID,
   SPREADSHEET_STORAGE_KEY, 
   SPREADSHEET_TITLE_KEY, 
+  getStoredWebhookUrl,
   getExistingSpreadsheet, 
   createPosSpreadsheet, 
   appendTransactionToSheet, 
   batchAppendTransactionsToSheet,
-  appendPreorderPickupToSheet
+  appendPreorderPickupToSheet,
+  syncUniversalTransaction,
+  syncUniversalBatch,
+  syncUniversalPreorderPickup
 } from './services/sheetsService';
 import { isSoundEnabled, setSoundEnabled, playTapSound } from './utils/audio';
 
@@ -141,7 +147,8 @@ export default function App() {
   // Auth & Sheets State
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
-  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetInfo | null>(null);
+  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetInfo>(DEFAULT_SPREADSHEET_INFO);
+  const [hasWebhook, setHasWebhook] = useState<boolean>(() => Boolean(getStoredWebhookUrl()));
   const [isSyncing, setIsSyncing] = useState(false);
   const [soundActive, setSoundActive] = useState<boolean>(isSoundEnabled());
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
@@ -164,6 +171,17 @@ export default function App() {
     }
   }, [offlineQueue]);
 
+  // Auto-sync offline queue when internet is restored
+  useEffect(() => {
+    const handleOnline = () => {
+      if (offlineQueue.length > 0) {
+        handleSyncOfflineQueue();
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [offlineQueue]);
+
   // Persist preorders
   useEffect(() => {
     try {
@@ -173,31 +191,22 @@ export default function App() {
     }
   }, [preorders]);
 
-  // Load / Setup Google Spreadsheet after auth
+  // Load / Verify Google Spreadsheet after auth (locked to TARGET_SPREADSHEET_ID)
   const setupSpreadsheetForUser = useCallback(async (token: string) => {
     setIsSyncing(true);
     try {
-      const savedId = localStorage.getItem(SPREADSHEET_STORAGE_KEY);
-      if (savedId) {
-        const existing = await getExistingSpreadsheet(token, savedId);
-        if (existing) {
-          setSpreadsheet(existing);
-          setIsSyncing(false);
-          return existing;
-        }
+      const targetId = localStorage.getItem(SPREADSHEET_STORAGE_KEY) || TARGET_SPREADSHEET_ID;
+      const existing = await getExistingSpreadsheet(token, targetId);
+      if (existing) {
+        setSpreadsheet(existing);
+      } else {
+        setSpreadsheet(DEFAULT_SPREADSHEET_INFO);
       }
-
-      // If no valid existing spreadsheet, create a new one automatically
-      const newSheet = await createPosSpreadsheet(token);
-      setSpreadsheet(newSheet);
-      setBannerNotice(`Google Spreadsheet "${newSheet.title}" terhubung & siap digunakan!`);
-      setTimeout(() => setBannerNotice(null), 5000);
-      setIsSyncing(false);
-      return newSheet;
     } catch (err) {
-      console.error('Error configuring spreadsheet:', err);
+      console.warn('Could not verify spreadsheet via OAuth, keeping default target:', err);
+      setSpreadsheet(DEFAULT_SPREADSHEET_INFO);
+    } finally {
       setIsSyncing(false);
-      return null;
     }
   }, []);
 
@@ -210,7 +219,7 @@ export default function App() {
       },
       () => {
         setUser(null);
-        setSpreadsheet(null);
+        setSpreadsheet(DEFAULT_SPREADSHEET_INFO);
       }
     );
     return () => unsubscribe();
@@ -243,7 +252,7 @@ export default function App() {
   const handleSignOut = async () => {
     await logout();
     setUser(null);
-    setSpreadsheet(null);
+    setSpreadsheet(DEFAULT_SPREADSHEET_INFO);
   };
 
   // Cart operations
@@ -341,21 +350,21 @@ export default function App() {
     // Close payment modal
     setIsPaymentModalOpen(false);
 
-    // Try syncing to Google Sheets if logged in & spreadsheet ready
+    // Try syncing to Google Sheets (Universal: Webhook or OAuth)
     const token = await getAccessToken();
-    if (token && spreadsheet) {
-      setIsSyncing(true);
-      try {
-        await appendTransactionToSheet(token, spreadsheet.id, newTx);
+    setIsSyncing(true);
+    try {
+      const res = await syncUniversalTransaction(newTx, token, spreadsheet.id);
+      if (res.success) {
         newTx.syncedToSheets = true;
-      } catch (err) {
-        console.warn('Sheets sync failed, queuing offline:', err);
+      } else {
         setOfflineQueue((q) => [newTx, ...q]);
-      } finally {
-        setIsSyncing(false);
       }
-    } else {
+    } catch (err) {
+      console.warn('Sheets sync failed, queuing offline:', err);
       setOfflineQueue((q) => [newTx, ...q]);
+    } finally {
+      setIsSyncing(false);
     }
 
     // Save to transactions list
@@ -399,18 +408,18 @@ export default function App() {
       };
 
       const token = await getAccessToken();
-      if (token && spreadsheet) {
-        setIsSyncing(true);
-        try {
-          await appendTransactionToSheet(token, spreadsheet.id, newTx);
+      setIsSyncing(true);
+      try {
+        const res = await syncUniversalTransaction(newTx, token, spreadsheet.id);
+        if (res.success) {
           newTx.syncedToSheets = true;
-        } catch {
+        } else {
           setOfflineQueue((q) => [newTx, ...q]);
-        } finally {
-          setIsSyncing(false);
         }
-      } else {
+      } catch {
         setOfflineQueue((q) => [newTx, ...q]);
+      } finally {
+        setIsSyncing(false);
       }
 
       setTransactions((prev) => [newTx, ...prev]);
@@ -467,18 +476,18 @@ export default function App() {
     };
 
     const token = await getAccessToken();
-    if (token && spreadsheet) {
-      setIsSyncing(true);
-      try {
-        await appendTransactionToSheet(token, spreadsheet.id, newTx);
+    setIsSyncing(true);
+    try {
+      const res = await syncUniversalTransaction(newTx, token, spreadsheet.id);
+      if (res.success) {
         newTx.syncedToSheets = true;
-      } catch {
+      } else {
         setOfflineQueue((q) => [newTx, ...q]);
-      } finally {
-        setIsSyncing(false);
       }
-    } else {
+    } catch {
       setOfflineQueue((q) => [newTx, ...q]);
+    } finally {
+      setIsSyncing(false);
     }
 
     setTransactions((prev) => [newTx, ...prev]);
@@ -523,13 +532,13 @@ export default function App() {
       )
     );
 
-    // Report pickup to Google Sheets
+    // Report pickup to Google Sheets (Universal: Webhook or OAuth)
     const token = await getAccessToken();
-    if (token && spreadsheet) {
-      setIsSyncing(true);
-      try {
-        const itemsSummary = target.items.map((i) => `${i.name} (x${i.quantity})`).join(', ');
-        await appendPreorderPickupToSheet(token, spreadsheet.id, {
+    setIsSyncing(true);
+    try {
+      const itemsSummary = target.items.map((i) => `${i.name} (x${i.quantity})`).join(', ');
+      await syncUniversalPreorderPickup(
+        {
           id: target.id,
           customerName: target.customerName,
           itemsSummary,
@@ -538,12 +547,14 @@ export default function App() {
           paymentMethod: target.paymentMethod || 'LUNAS',
           pickedUpAt: pickupTimeStr,
           note: target.pickupTimeNote,
-        });
-      } catch (err) {
-        console.warn('Failed to report pickup to sheets:', err);
-      } finally {
-        setIsSyncing(false);
-      }
+        },
+        token,
+        spreadsheet.id
+      );
+    } catch (err) {
+      console.warn('Failed to report pickup to sheets:', err);
+    } finally {
+      setIsSyncing(false);
     }
 
     setBannerNotice(`✓ Pesanan ${target.customerName} dilaporkan SUDAH DIAMBIL! Tercatat di Google Sheets.`);
@@ -589,25 +600,24 @@ export default function App() {
     setTimeout(() => setBannerNotice(null), 4000);
   };
 
-  // Sync all pending offline queue transactions to Google Sheets
+  // Sync all pending offline queue transactions to Google Sheets (Universal: Webhook or OAuth)
   const handleSyncOfflineQueue = async () => {
-    const token = await getAccessToken();
-    if (!token || !spreadsheet) {
-      throw new Error('Harap hubungkan akun Google Sheets terlebih dahulu.');
-    }
     if (offlineQueue.length === 0) return;
 
+    const token = await getAccessToken();
     setIsSyncing(true);
     try {
-      const ok = await batchAppendTransactionsToSheet(token, spreadsheet.id, offlineQueue);
-      if (ok) {
+      const res = await syncUniversalBatch(offlineQueue, token, spreadsheet.id);
+      if (res.success) {
         const syncedIds = new Set(offlineQueue.map((tx) => tx.id));
         setTransactions((prev) =>
           prev.map((tx) => (syncedIds.has(tx.id) ? { ...tx, syncedToSheets: true } : tx))
         );
         setOfflineQueue([]);
-        setBannerNotice('Semua transaksi offline berhasil disinkronkan ke Google Sheets!');
+        setBannerNotice(`Semua ${res.count} transaksi offline berhasil disinkronkan ke Google Sheets!`);
         setTimeout(() => setBannerNotice(null), 4000);
+      } else {
+        throw new Error('Gagal menyinkronkan antrean ke Google Sheets. Pastikan internet atau Webhook aktif.');
       }
     } finally {
       setIsSyncing(false);
@@ -654,6 +664,7 @@ export default function App() {
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         spreadsheet={spreadsheet}
+        hasWebhook={hasWebhook}
         isSyncing={isSyncing}
         offlineQueueCount={offlineQueue.length}
         preorderCount={activePreordersCount}
@@ -945,6 +956,7 @@ export default function App() {
         offlineQueueCount={offlineQueue.length}
         isSyncing={isSyncing}
         onGoogleSignIn={handleSignIn}
+        onWebhookUpdated={(url) => setHasWebhook(Boolean(url))}
       />
     </div>
   );
